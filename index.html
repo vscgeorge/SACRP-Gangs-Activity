@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Gang Stats Dashboard</title>
+
+<title>Gang Activity Dashboard</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
@@ -10,38 +10,26 @@
 
 body{
 background:#0f1117;
-font-family:'Inter',sans-serif;
 color:#e6edf3;
-margin:0;
+font-family:Inter;
 padding:40px;
 }
 
 .container{
-max-width:1100px;
+max-width:1200px;
 margin:auto;
 }
 
-h1{
-font-weight:600;
-font-size:34px;
-}
-
-.subtitle{
-color:#8b949e;
-margin-bottom:30px;
-}
-
-.upload-area{
+.upload{
 border:2px dashed #30363d;
-border-radius:12px;
 padding:60px;
+border-radius:12px;
 text-align:center;
 cursor:pointer;
-transition:0.25s;
 margin-bottom:30px;
 }
 
-.upload-area.dragover{
+.upload:hover{
 border-color:#58a6ff;
 background:#161b22;
 }
@@ -54,80 +42,105 @@ gap:20px;
 
 .card{
 background:#161b22;
-border-radius:12px;
 padding:20px;
+border-radius:12px;
 }
 
-textarea{
+table{
 width:100%;
-height:170px;
-background:#0d1117;
-border:none;
-border-radius:8px;
+border-collapse:collapse;
+}
+
+td,th{
 padding:10px;
-color:#79c0ff;
-font-family:monospace;
-resize:none;
+border-bottom:1px solid #30363d;
 }
 
 button{
-margin-top:10px;
 background:#238636;
 border:none;
+padding:8px 12px;
 color:white;
-padding:8px 14px;
 border-radius:6px;
 cursor:pointer;
-}
-
-button:hover{
-background:#2ea043;
-}
-
-.total{
-grid-column:1/3;
-text-align:center;
-font-size:22px;
-font-weight:600;
-padding:30px;
+margin-top:10px;
 }
 
 input{
-display:none;
+padding:10px;
+border-radius:6px;
+border:none;
+background:#0d1117;
+color:white;
+width:100%;
+margin-bottom:10px;
+}
+
+.result{
+margin-top:10px;
+font-size:14px;
+color:#79c0ff;
 }
 
 </style>
+
 </head>
 
 <body>
 
 <div class="container">
 
-<h1>Gang Stats Dashboard</h1>
-<div class="subtitle">Upload your weekly duty CSV</div>
+<h1>Gang Activity Dashboard</h1>
 
-<div class="upload-area" id="uploadArea">
-📂 Drag & Drop CSV Anywhere or Click to Upload
-<input type="file" id="csvFile" accept=".csv">
+<div class="upload" id="uploadArea">
+Drop CSV or Click to Upload
+<input type="file" id="csvFile" hidden>
 </div>
 
 <div class="grid">
 
 <div class="card">
-<h2>🏆 Player Leaderboard</h2>
-<textarea id="players"></textarea>
-<button onclick="copyText('players')">Copy</button>
+
+<h3>🏆 Player Leaderboard</h3>
+
+<table id="playerTable">
+<tr>
+<th>Rank</th>
+<th>Name</th>
+<th>Hours</th>
+</tr>
+</table>
+
+<button onclick="copyPlayerLeaderboard()">Copy Discord Leaderboard</button>
+
 </div>
 
 <div class="card">
-<h2>🏴 Gang Hours Leaderboard</h2>
-<textarea id="gangs"></textarea>
-<button onclick="copyText('gangs')">Copy</button>
+
+<h3>🏴 Gang Hours Leaderboard</h3>
+
+<table id="gangTable">
+<tr>
+<th>Rank</th>
+<th>Gang</th>
+<th>Hours</th>
+</tr>
+</table>
+
+<button onclick="copyGangLeaderboard()">Copy Gang Leaderboard</button>
+
 </div>
 
-<div class="card total">
-<div id="totalHours">Upload a CSV to calculate total hours</div>
-<button onclick="copyText('totalHours')">Copy</button>
+<div class="card">
+
+<h3>🔍 Player Search</h3>
+
+<input id="searchId" placeholder="Enter Discord ID">
+
+<button onclick="searchPlayer()">Search</button>
+
+<div class="result" id="searchResult"></div>
+
 </div>
 
 </div>
@@ -136,84 +149,80 @@ display:none;
 
 <script>
 
-const uploadArea = document.getElementById("uploadArea")
-const fileInput = document.getElementById("csvFile")
+let currentPlayers=[]
+let currentGangs=[]
 
-uploadArea.addEventListener("click", () => fileInput.click())
+const uploadArea=document.getElementById("uploadArea")
+const fileInput=document.getElementById("csvFile")
 
-fileInput.addEventListener("change", e => {
-handleFile(e.target.files[0])
-})
+uploadArea.onclick=()=>fileInput.click()
 
-document.addEventListener("dragover", e => {
-e.preventDefault()
-uploadArea.classList.add("dragover")
-})
-
-document.addEventListener("dragleave", e => {
-uploadArea.classList.remove("dragover")
-})
-
-document.addEventListener("drop", e => {
-
-e.preventDefault()
-uploadArea.classList.remove("dragover")
-
-if(e.dataTransfer.files.length){
-handleFile(e.dataTransfer.files[0])
+fileInput.onchange=e=>{
+processFile(e.target.files[0])
 }
 
+uploadArea.addEventListener("dragover",e=>{
+e.preventDefault()
 })
 
-function handleFile(file){
+uploadArea.addEventListener("drop",e=>{
+e.preventDefault()
+processFile(e.dataTransfer.files[0])
+})
 
-const reader = new FileReader()
+function processFile(file){
 
-reader.onload = function(e){
+const reader=new FileReader()
 
-const lines = e.target.result.split("\n").slice(1)
+reader.onload=function(e){
+
+const rows=e.target.result.split("\n").slice(1)
 
 let players={}
 let gangs={}
 
-lines.forEach(line=>{
+rows.forEach(r=>{
 
-let parts=line.split(",")
+let cols=r.split(",")
 
-if(parts.length<4)return
+if(cols.length<4)return
 
-let id=parts[1].replace(/"/g,"")
-let gang=parts[2].replace(/"/g,"")
-let minutes=parseFloat(parts[3].replace(/"/g,""))
+let name=cols[0].replace(/"/g,"")
+let id=cols[1].replace(/"/g,"")
+let gang=cols[2].replace(/"/g,"")
+let mins=parseFloat(cols[3].replace(/"/g,""))
 
-players[id]=(players[id]||0)+minutes
-gangs[gang]=(gangs[gang]||0)+minutes
-
-})
-
-let playerArray=Object.entries(players).map(p=>[p[0],p[1]/60])
-let gangArray=Object.entries(gangs).map(g=>[g[0],g[1]/60])
-
-playerArray.sort((a,b)=>b[1]-a[1])
-gangArray.sort((a,b)=>b[1]-a[1])
-
-let playerMsg=""
-
-for(let i=0;i<10 && i<playerArray.length;i++){
-playerMsg+=`${i+1}. <@${playerArray[i][0]}> — ${playerArray[i][1].toFixed(2)} hrs\n`
+if(!players[id]){
+players[id]={name:name,minutes:0}
 }
 
-let gangMsg=""
+players[id].minutes+=mins
 
-gangArray.forEach((g,i)=>{
-gangMsg+=`${i+1}. ${g[0]} — ${g[1].toFixed(2)} hrs\n`
+gangs[gang]=(gangs[gang]||0)+mins
+
 })
 
-let totalHours=playerArray.reduce((sum,p)=>sum+p[1],0)
+let playerArr=Object.entries(players).map(p=>({
+id:p[0],
+name:p[1].name,
+hours:p[1].minutes/60
+}))
 
-document.getElementById("players").value=playerMsg
-document.getElementById("gangs").value=gangMsg
-document.getElementById("totalHours").innerText=`Total Gang Hours This Week: ${totalHours.toFixed(2)} hrs`
+playerArr.sort((a,b)=>b.hours-a.hours)
+
+currentPlayers=playerArr
+
+let gangArr=Object.entries(gangs).map(g=>({
+name:g[0],
+hours:g[1]/60
+}))
+
+gangArr.sort((a,b)=>b.hours-a.hours)
+
+currentGangs=gangArr
+
+renderPlayers(playerArr)
+renderGangs(gangArr)
 
 }
 
@@ -221,17 +230,102 @@ reader.readAsText(file)
 
 }
 
-function copyText(id){
+function renderPlayers(arr){
 
-let text
+const table=document.getElementById("playerTable")
 
-if(id==="totalHours"){
-text=document.getElementById(id).innerText
-}else{
-text=document.getElementById(id).value
+table.innerHTML=`
+<tr>
+<th>Rank</th>
+<th>Name</th>
+<th>Hours</th>
+</tr>
+`
+
+arr.slice(0,10).forEach((p,i)=>{
+
+table.innerHTML+=`
+<tr>
+<td>${i+1}</td>
+<td>${p.name}</td>
+<td>${p.hours.toFixed(2)}</td>
+</tr>
+`
+
+})
+
 }
 
+function renderGangs(arr){
+
+const table=document.getElementById("gangTable")
+
+table.innerHTML=`
+<tr>
+<th>Rank</th>
+<th>Gang</th>
+<th>Hours</th>
+</tr>
+`
+
+arr.forEach((g,i)=>{
+
+table.innerHTML+=`
+<tr>
+<td>${i+1}</td>
+<td>${g.name}</td>
+<td>${g.hours.toFixed(2)}</td>
+</tr>
+`
+
+})
+
+}
+
+function copyPlayerLeaderboard(){
+
+let text=""
+
+currentPlayers.slice(0,10).forEach((p,i)=>{
+
+text+=`${i+1}. <@${p.id}> — ${p.hours.toFixed(2)} hrs\n`
+
+})
+
 navigator.clipboard.writeText(text)
+
+}
+
+function copyGangLeaderboard(){
+
+let text=""
+
+currentGangs.forEach((g,i)=>{
+
+text+=`${i+1}. ${g.name} — ${g.hours.toFixed(2)} hrs\n`
+
+})
+
+navigator.clipboard.writeText(text)
+
+}
+
+function searchPlayer(){
+
+const id=document.getElementById("searchId").value
+
+let player=currentPlayers.find(p=>p.id===id)
+
+if(!player){
+
+document.getElementById("searchResult").innerText="Player not found in this week's CSV"
+
+return
+
+}
+
+document.getElementById("searchResult").innerText=
+`${player.name} (<@${player.id}>) — ${player.hours.toFixed(2)} hours`
 
 }
 
