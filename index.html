@@ -129,6 +129,8 @@ Drop CSV or Click to Upload
 
 <button onclick="copyGangLeaderboard()">Copy Gang Leaderboard</button>
 
+<div class="result" id="gangTotal"></div>
+
 </div>
 
 <div class="card">
@@ -220,6 +222,11 @@ hours:g[1]/60
 gangArr.sort((a,b)=>b.hours-a.hours)
 
 currentGangs=gangArr
+
+// ✅ TOTAL GANG HOURS CALCULATION
+let totalGangHours = gangArr.reduce((sum, g) => sum + g.hours, 0)
+document.getElementById("gangTotal").innerText =
+`Total Gang Hours: ${totalGangHours.toFixed(2)} hrs`
 
 renderPlayers(playerArr)
 renderGangs(gangArr)
